@@ -10,3 +10,9 @@ config ANTMICRO_STEREO_VISION
         default m
         ---help---
           Stereo Vision IPCore driver.
+
+config ANTMICRO_MT9J003_DRIVER
+        tristate "Driver for MT9J003 image sensor"
+        default m
+        ---help---
+          Image sensor driver.
