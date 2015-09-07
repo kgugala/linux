@@ -3,7 +3,6 @@
 
 struct drm_device;
 struct drm_crtc;
-
 struct drm_crtc* axi_dispctrl_crtc_create(struct drm_device *dev);
 
 #endif

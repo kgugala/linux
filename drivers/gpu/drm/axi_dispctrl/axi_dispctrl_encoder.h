@@ -18,30 +18,27 @@ struct drm_encoder *axi_dispctrl_encoder_create(struct drm_device *dev);
 #define OFST_DISPLAY_LOCK_L 0x2C
 #define OFST_DISPLAY_FLTR_LOCK_H 0x30
 
-struct clk_mode{
-        unsigned int freq;
-        unsigned int fbmult;
-        unsigned int clkdiv;
-        unsigned int maindiv;
+struct clk_mode {
+	unsigned int freq;
+	unsigned int fbmult;
+	unsigned int clkdiv;
+	unsigned int maindiv;
 };
 
-struct clk_config{
-        unsigned int clk0L;
-        unsigned int clkFBL;
-        unsigned int clkFBH_clk0H;
-        unsigned int divclk;
-        unsigned int lockL;
-        unsigned int fltr_lockH;
+struct clk_config {
+	unsigned int clk0L;
+	unsigned int clkFBL;
+	unsigned int clkFBH_clk0H;
+	unsigned int divclk;
+	unsigned int lockL;
+	unsigned int fltr_lockH;
 };
 
 
 #define CLK_BIT_WEDGE 13
 #define CLK_BIT_NOCOUNT 12
-
 #define ERR_CLKDIVIDER (1 << CLK_BIT_WEDGE | 1 << CLK_BIT_NOCOUNT)
-
 #define ERR_CLKCOUNTCALC 0xFFFFFFFF
-
 
 extern uint8_t samsung_edid[];
 extern const uint64_t lock_lookup[];
