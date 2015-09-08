@@ -186,7 +186,8 @@ static int axi_dispctrl_platform_probe(struct platform_device *pdev)
 	const struct of_device_id *id;
 	struct resource *res;
 	int err;
-	struct device_node *slave_node;
+	struct device_node *adapter_node;
+	struct i2c_adapter *adapter;
 
 	private = devm_kzalloc(&pdev->dev, sizeof(*private), GFP_KERNEL);
 	if (!private)
@@ -249,19 +250,16 @@ static int axi_dispctrl_platform_probe(struct platform_device *pdev)
 			return -EINVAL;
 		}
 	}
-
-	slave_node = of_parse_phandle(np, "encoder-slave", 0);
-	if (!slave_node)
-		return -EINVAL;
-	private->encoder_slave = of_find_i2c_device_by_node(slave_node);
-	of_node_put(slave_node);
-
-	if (!private->encoder_slave || !private->encoder_slave->dev.driver) {
-		dev_err(&pdev->dev, "%s:%s[%d]\n",
-			__FILE__, __func__, __LINE__);
-		return -EPROBE_DEFER;
+	/*find the i2c_adapter*/
+	adapter_node = of_parse_phandle(np, "ddc-adapter", 0);
+	if (adapter_node) {
+		adapter = of_find_i2c_adapter_by_node(adapter_node);
+		if (adapter == NULL) {
+			dev_err(&pdev->dev, "failed to parse ddc-i2c-bus\n");
+			return -EPROBE_DEFER;
+		}
+		private->i2c_adapter = adapter;
 	}
-
 	private->dma = dma_request_slave_channel(&pdev->dev, "video");
 	if (private->dma == NULL)
 		return -EPROBE_DEFER;

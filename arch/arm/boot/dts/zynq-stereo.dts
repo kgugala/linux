@@ -493,18 +493,12 @@
                         xlnx,ten-bit-adr = <0x0>;
                         xlnx,iic-freq = <0x186a0>;
                         xlnx,s-axi-aclk-freq-hz = <0x5f5e100>;
-       		        edid_reader: edid_reader@39 {
-	        		compatible = "ant,edid_reader";
-	        		reg = <0x50>;
-		        	#size-cells = <0>;
-			        #address-cells = <1>;
-	                 };
-		};
+       		};
 		axi_hdmi@75c00000 {
                         compatible = "ant,axi-dispctrl-hdmi-tx";
                         reg = <0x75c00000 0x10000>;
                         dmas = <&hdmivdma 0x0>;
-                        encoder-slave = <&edid_reader>;
+			ddc-adapter = <&axi_iic_0>;
                         dma-names = "video";
                 };
 
