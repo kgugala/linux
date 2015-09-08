@@ -6,7 +6,7 @@
  *
  * Author(s):
  *   Karol Gugala <kgugala@antmicro.com>
- *
+ *   Szymon Sobczak
  * Licensed under the GPL-2.
  */
 
@@ -49,6 +49,13 @@ drm_encoder *connector_to_encoder(struct drm_connector *connector)
 	enc  = container_of(connector, struct axi_dispctrl_encoder, connector);
 	return &enc->encoder.base;
 }
+static inline struct
+drm_encoder_slave_funcs *get_slave_funcs(struct drm_encoder *encoder)
+{
+	if (!to_encoder_slave(encoder))
+		return NULL;
+	return to_encoder_slave(encoder)->slave_funcs;
+}
 
 static int axi_dispctrl_connector_init(struct drm_device *dev,
 				       struct drm_connector *connector,
@@ -80,7 +87,6 @@ axi_dispctrl_encoder_mode_fixup(struct drm_encoder *encoder,
 				const struct drm_display_mode *mode,
 				struct drm_display_mode *adjusted_mode)
 {
-	/* do nothing */
 	return true;
 }
 
@@ -273,9 +279,12 @@ static struct drm_encoder_helper_funcs axi_dispctrl_encoder_helper_funcs = {
 
 static void axi_dispctrl_encoder_destroy(struct drm_encoder *encoder)
 {
-	struct axi_dispctrl_encoder *axi_dispctrl_encoder =
-		to_axi_dispctrl_encoder(encoder);
+	struct axi_dispctrl_encoder *axi_dispctrl_encoder;
+	struct drm_encoder_slave_funcs *sfuncs = get_slave_funcs(encoder);
 
+	axi_dispctrl_encoder = to_axi_dispctrl_encoder(encoder);
+	if (sfuncs && sfuncs->destroy)
+		sfuncs->destroy(encoder);
 	drm_encoder_cleanup(encoder);
 	encoder->dev->mode_config.num_encoder--;
 	kfree(axi_dispctrl_encoder);
@@ -290,6 +299,9 @@ struct drm_encoder *axi_dispctrl_encoder_create(struct drm_device *dev)
 	struct drm_encoder *encoder;
 	struct drm_connector *connector;
 	struct axi_dispctrl_encoder *axi_dispctrl_encoder;
+	struct drm_i2c_encoder_driver *encoder_drv;
+	struct axi_dispctrl_private *priv = dev->dev_private;
+	struct device_driver *drv;
 
 	axi_dispctrl_encoder = kzalloc(sizeof(*axi_dispctrl_encoder),
 				       GFP_KERNEL);
@@ -301,6 +313,11 @@ struct drm_encoder *axi_dispctrl_encoder_create(struct drm_device *dev)
 	drm_encoder_init(dev, encoder, &axi_dispctrl_encoder_funcs,
 			 DRM_MODE_ENCODER_TMDS);
 	drm_encoder_helper_add(encoder, &axi_dispctrl_encoder_helper_funcs);
+	drv = priv->encoder_slave->dev.driver;
+	encoder_drv = to_drm_i2c_encoder_driver(to_i2c_driver(drv));
+	encoder_drv->encoder_init(priv->encoder_slave, dev,
+				  &axi_dispctrl_encoder->encoder);
+
 	connector = &axi_dispctrl_encoder->connector;
 	axi_dispctrl_connector_init(dev, connector, encoder);
 	return encoder;
@@ -310,7 +327,8 @@ static int axi_dispctrl_connector_get_modes(struct drm_connector *connector)
 {
 	struct axi_dispctrl_private *private = connector->dev->dev_private;
 	struct drm_display_mode *mode;
-	struct edid *s_edid = (struct edid *) samsung_edid;
+	struct drm_encoder *encoder = connector_to_encoder(connector);
+	struct drm_encoder_slave_funcs *sfuncs = get_slave_funcs(encoder);
 	int count = 0;
 	/* If we are in lcd mode use fixed modes */
 	if (private->lcd_mode) {
@@ -325,10 +343,9 @@ static int axi_dispctrl_connector_get_modes(struct drm_connector *connector)
 	/* Get edid otherwise */
 	else {
 		/*XXX: Use real edid*/
-		drm_mode_connector_update_edid_property(connector, s_edid);
-		count = drm_add_edid_modes(connector, s_edid);
+		if (sfuncs && sfuncs->get_modes)
+			count = sfuncs->get_modes(encoder, connector);
 	}
-
 	return count;
 }
 

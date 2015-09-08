@@ -15,6 +15,7 @@ struct axi_dispctrl_private {
 	bool lcd_mode;
 	bool invert_pix_clk;
 	struct drm_display_mode *lcd_fixed_mode;
+	struct i2c_client *encoder_slave;
 };
 
 extern struct of_device_id displays_of_match[];

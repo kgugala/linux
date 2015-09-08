@@ -480,10 +480,31 @@
 				xlnx,include-dre = <0x0>;
 			};
 		};
+	    	axi_iic_0: i2c@41600000 {
+                        compatible = "xlnx,axi-iic-1.01.b", "xlnx,xps-iic-2.00.a";
+                        interrupts = <0 33 4>;
+			reg = <0x41600000 0x10000>;
+                        #size-cells = <0>;
+			#address-cells = <1>;
+                        xlnx,scl-inertial-delay = <0>;
+                        xlnx,sda-inertial-delay = <0>;
+                        xlnx,sda-level = <0x1>;
+	                interrupt-parent = <0x1>;
+                        xlnx,ten-bit-adr = <0x0>;
+                        xlnx,iic-freq = <0x186a0>;
+                        xlnx,s-axi-aclk-freq-hz = <0x5f5e100>;
+       		        edid_reader: edid_reader@39 {
+	        		compatible = "ant,edid_reader";
+	        		reg = <0x50>;
+		        	#size-cells = <0>;
+			        #address-cells = <1>;
+	                 };
+		};
 		axi_hdmi@75c00000 {
                         compatible = "ant,axi-dispctrl-hdmi-tx";
                         reg = <0x75c00000 0x10000>;
                         dmas = <&hdmivdma 0x0>;
+                        encoder-slave = <&edid_reader>;
                         dma-names = "video";
                 };
 

@@ -6,7 +6,7 @@
  *
  * Author(s):
  *   Karol Gugala <kgugala@antmicro.com>
- *
+ *   Szymon Sobczak
  * Licensed under the GPL-2.
  */
 
@@ -186,6 +186,7 @@ static int axi_dispctrl_platform_probe(struct platform_device *pdev)
 	const struct of_device_id *id;
 	struct resource *res;
 	int err;
+	struct device_node *slave_node;
 
 	private = devm_kzalloc(&pdev->dev, sizeof(*private), GFP_KERNEL);
 	if (!private)
@@ -196,9 +197,6 @@ static int axi_dispctrl_platform_probe(struct platform_device *pdev)
 	if (IS_ERR(private->base))
 		return PTR_ERR(private->base);
 
-	private->dma = dma_request_slave_channel(&pdev->dev, "video");
-	if (private->dma == NULL)
-		return -EPROBE_DEFER;
 
 	private->lcd_mode = of_device_is_compatible(np, "ant,axi-dispctrl-lcd");
 	dev_info(&pdev->dev, "We are%sin lcd_mode\n",
@@ -252,6 +250,22 @@ static int axi_dispctrl_platform_probe(struct platform_device *pdev)
 		}
 	}
 
+	slave_node = of_parse_phandle(np, "encoder-slave", 0);
+	if (!slave_node)
+		return -EINVAL;
+	private->encoder_slave = of_find_i2c_device_by_node(slave_node);
+	of_node_put(slave_node);
+
+	if (!private->encoder_slave || !private->encoder_slave->dev.driver) {
+		dev_err(&pdev->dev, "%s:%s[%d]\n",
+			__FILE__, __func__, __LINE__);
+		return -EPROBE_DEFER;
+	}
+
+	private->dma = dma_request_slave_channel(&pdev->dev, "video");
+	if (private->dma == NULL)
+		return -EPROBE_DEFER;
+
 	platform_set_drvdata(pdev, private);
 
 	return drm_platform_init(&axi_dispctrl_driver, pdev);
@@ -259,6 +273,11 @@ static int axi_dispctrl_platform_probe(struct platform_device *pdev)
 
 static int axi_dispctrl_platform_remove(struct platform_device *pdev)
 {
+	struct	axi_dispctrl_private *private = platform_get_drvdata(pdev);
+
+	drm_put_dev(private->drm_dev);
+	dma_release_channel(private->dma);
+
 	return 0;
 }
 
