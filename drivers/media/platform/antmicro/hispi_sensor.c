@@ -16,7 +16,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
 #include <linux/platform_device.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
@@ -92,11 +91,11 @@ void *alloc_ctxs[])
 	*num_planes = 1;
 
 	if (fmt) {
-		dev_dbg(channel->subdev->dev,
+		dev_dbg(&channel->vdev.dev,
 			"We have format and we're going to use it\n");
 		sizes[0] = fmt->fmt.pix.sizeimage;
 	} else {
-		dev_dbg(channel->subdev->dev,
+		dev_dbg(&channel->vdev.dev,
 			"Format is taken from channel settings\n");
 		sizes[0] = channel->video_x * channel->video_y * channel->bpp;
 	}
@@ -113,7 +112,7 @@ static int hispi_buf_prepare(struct vb2_buffer *vb)
 
 	size = channel->video_x * channel->video_y * channel->bpp;
 	if (vb2_plane_size(vb, 0) < size) {
-		dev_err(channel->subdev->dev,
+		dev_err(&channel->vdev.dev,
 			"data will not fit the plane (%lu < %u)\n",
 			vb2_plane_size(vb, 0), size);
 		return -EINVAL;
@@ -152,7 +151,7 @@ static void setup_internal_transfer(struct sensor_channel *channel)
 					      DMA_PREP_INTERRUPT);
 	kfree(xt);
 	if (!desc) {
-		dev_err(channel->subdev->dev, "vdma desc prepare error\n");
+		dev_err(&channel->vdev.dev, "vdma desc prepare error\n");
 		return;
 	}
 
@@ -161,7 +160,7 @@ static void setup_internal_transfer(struct sensor_channel *channel)
 	cookie = dmaengine_submit(desc);
 
 	if (cookie < 0) {
-		dev_err(channel->subdev->dev,
+		dev_err(&channel->vdev.dev,
 			"vdma engine submit error\n");
 		return;
 	}
@@ -255,7 +254,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 		xt->sgl[0].icg = 0;
 		xt->dir = DMA_DEV_TO_MEM;
 
-		dev_dbg(channel->subdev->dev,
+		dev_dbg(&channel->vdev.dev,
 			"Internal VDMA addr is: 0x%08x, size = %ld\n",
 			internal_dst, size);
 
@@ -263,7 +262,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 						      DMA_PREP_INTERRUPT);
 		kfree(xt);
 		if (!desc) {
-			dev_err(channel->subdev->dev,
+			dev_err(&channel->vdev.dev,
 				"vdma desc prepare error\n");
 			return;
 		}
@@ -273,7 +272,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 
 		cookie = dmaengine_submit(desc);
 		if (cookie < 0) {
-			dev_err(channel->subdev->dev,
+			dev_err(&channel->vdev.dev,
 				"vdma engine submit error\n");
 			return;
 		}
@@ -290,7 +289,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 					     DMA_CTRL_ACK |
 					     DMA_PREP_INTERRUPT);
 	if (!desc) {
-		dev_err(channel->subdev->dev, "dma desc prepare error\n");
+		dev_err(&channel->vdev.dev, "dma desc prepare error\n");
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
@@ -300,7 +299,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 
 	cookie = desc->tx_submit(desc);
 	if (cookie < 0) {
-		dev_err(channel->subdev->dev, "dma engine submit error\n");
+		dev_err(&channel->vdev.dev, "dma engine submit error\n");
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
@@ -377,7 +376,7 @@ static int hispi_reset_sensor(struct hispi_priv_data *private)
 	err = v4l2_subdev_call(private->channel.subdev, core, reset, 0);
 	private->sensor_synced = 0;
 	if (err) {
-		dev_err(private->channel.subdev->dev,
+		dev_err(&private->channel.vdev.dev,
 			"Error during calling subdev\n");
 		return err;
 	}
@@ -391,14 +390,14 @@ static int hispi_configure_sensor(struct hispi_priv_data *private)
 	hispi_write_reg(private, CTRL_REG, 0);
 	err = v4l2_subdev_call(private->channel.subdev, core, init, 0);
 	if (err) {
-		dev_err(private->channel.subdev->dev,
+		dev_err(&private->channel.vdev.dev,
 			"Error during calling subdev\n");
 		return err;
 	}
 	hispi_write_reg(private, CTRL_REG, ENABLE_BIT);
 	msleep(100);
 	reg = hispi_read_reg(private, STATUS_REG);
-	dev_dbg(private->channel.subdev->dev, "Sensor is %ssynced\n",
+	dev_dbg(&private->channel.vdev.dev, "Sensor is %ssynced\n",
 		reg?"":"not ");
 	if (!reg)
 		private->sensor_synced = 0;
@@ -501,7 +500,7 @@ static int hispi_enum_fmt_vid_cap(struct file *file, void *priv_fh,
 
 	struct hispi_priv_data *private = video_drvdata(file);
 
-	dev_dbg(private->channel.subdev->dev,
+	dev_dbg(&private->channel.vdev.dev,
 		"index[%d] = %s\n", f->index, f->description);
 
 	if (f->index == 0) {
@@ -705,11 +704,11 @@ static int hispi_sensor_async_bound(struct v4l2_async_notifier *notifier,
 
 		} while (--x && !reg);
 		if (!reg && !x)
-			dev_err(private->channel.subdev->dev,
+			dev_err(&private->channel.vdev.dev,
 				"Failed to sync %s\n",
 				private->asd.match.of.node->name);
 		else
-			dev_dbg(private->channel.subdev->dev,
+			dev_dbg(&private->channel.vdev.dev,
 				"Sensor is synced after %d attemps\n",
 				MAX_ATTEMPTS-x);
 	}
@@ -742,7 +741,7 @@ static int hispi_probe(struct platform_device *pdev)
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	private->base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(private->base)) {
-		dev_err(channel->subdev->dev, "IO mapping failed\n");
+		dev_err(&pdev->dev, "IO mapping failed\n");
 		return PTR_ERR(private->base);
 	}
 
@@ -754,19 +753,19 @@ static int hispi_probe(struct platform_device *pdev)
 					    MAX_X * MAX_Y * (BPP/8), GFP_DMA);
 
 	if (!private->buffer_virt) {
-		dev_err(channel->subdev->dev, "Could not allocate buffer\n");
+		dev_err(&pdev->dev, "Could not allocate buffer\n");
 		return -ENOMEM;
 	}
 	private->video_buffer = (dma_addr_t)virt_to_phys(private->buffer_virt);
-	dev_dbg(channel->subdev->dev, KERN_ERR"virt = 0x%p, phys = 0x%08x\n",
+	dev_dbg(&pdev->dev, KERN_ERR"virt = 0x%p, phys = 0x%08x\n",
 		private->buffer_virt, private->video_buffer);
 
-	dev_dbg(channel->subdev->dev, KERN_ERR"Going to request channel\n");
+	dev_dbg(&pdev->dev, KERN_ERR"Going to request channel\n");
 	private->channel.dma = dma_request_slave_channel(&pdev->dev, "video");
 	if (private->channel.dma == NULL)
 		return -EPROBE_DEFER;
 
-	dev_dbg(channel->subdev->dev, "Going to request preview channel\n");
+	dev_dbg(&pdev->dev, "Going to request preview channel\n");
 	private->channel.preview_dma = dma_request_slave_channel(&pdev->dev,
 								 "preview");
 	if (private->channel.dma == NULL) {
@@ -795,14 +794,14 @@ static int hispi_probe(struct platform_device *pdev)
 	channel->alloc_ctx = vb2_dma_contig_init_ctx(&pdev->dev);
 	if (IS_ERR(channel->alloc_ctx)) {
 		ret = PTR_ERR(channel->alloc_ctx);
-		dev_err(channel->subdev->dev, "Failed to init ctx\n");
+		dev_err(&pdev->dev, "Failed to init ctx\n");
 		return -ret;
 	}
 	video_set_drvdata(&private->channel.vdev, private);
 
 	ret = v4l2_device_register(&pdev->dev, &private->v4l2_dev);
 	if (ret) {
-		dev_err(channel->subdev->dev,
+		dev_err(&pdev->dev,
 			"Failed to register card: %d\n", ret);
 		return -ret;
 	}
@@ -810,7 +809,7 @@ static int hispi_probe(struct platform_device *pdev)
 	/* v4l2 subdev registration */
 	ep_node = v4l2_of_get_next_endpoint(pdev->dev.of_node, NULL);
 	if (!ep_node) {
-		dev_err(channel->subdev->dev, "Epnode searching error\n");
+		dev_err(&pdev->dev, "Epnode searching error\n");
 		return -EPROBE_DEFER;
 	}
 
@@ -823,7 +822,7 @@ static int hispi_probe(struct platform_device *pdev)
 	private->asd.match.of.node = v4l2_of_get_remote_port_parent(ep_node);
 	private->asds[0] = &private->asd;
 
-	dev_dbg(channel->subdev->dev,
+	dev_dbg(&pdev->dev,
 		"Hispi_sensor, found node fullname: %s\n",
 		private->asd.match.of.node->full_name);
 
@@ -837,14 +836,14 @@ static int hispi_probe(struct platform_device *pdev)
 					   &private->notifier);
 
 	if (ret) {
-		dev_err(channel->subdev->dev,
+		dev_err(&pdev->dev,
 			"Failed to register v4l2_async_notifier\n");
 		return -EPROBE_DEFER;
 	}
 
 	err = sysfs_create_group(&pdev->dev.kobj, &hispi_attr_group);
 	if (err) {
-		dev_err(channel->subdev->dev,
+		dev_err(&pdev->dev,
 			"Unable to create sysfs attributes, err: %d\n", err);
 		return err;
 	}
