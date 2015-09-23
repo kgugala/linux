@@ -26,6 +26,7 @@
 #include <linux/workqueue.h>
 #include <linux/of_graph.h>
 #include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
@@ -294,10 +295,8 @@ static int MT9J003_reset(struct v4l2_subdev *sd, u32 val)
 	gp.label = "gp_reset";
 
 	if (!state->gpio_set) {
-		err = of_property_read_u32(state->client->dev.of_node,
-					   "ant,reset-gpio",
-					   (u32 *)&(state->reset_gpio_number));
-		if (err) {
+		state->reset_gpio_number = of_get_named_gpio(sd->dev->of_node, "ant,reset-gpio", 0);
+		if (!gpio_is_valid(state->reset_gpio_number)) {
 			dev_err(&state->client->dev,
 				"Failed to read property \"ant,reset-gpio\"\n");
 			goto error;
