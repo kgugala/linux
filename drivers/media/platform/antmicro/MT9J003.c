@@ -46,10 +46,6 @@
 		if (err < 0) \
 			return err; } while (0)
 
-static int debug;
-module_param(debug, int, 0644);
-MODULE_PARM_DESC(debug, "debug level (0-2)");
-
 MODULE_DESCRIPTION("Driver for MT9J003 image sensor");
 MODULE_AUTHOR("Szymon Sobczak");
 MODULE_LICENSE("GPL v2");
@@ -67,6 +63,7 @@ struct MT9J003_state {
 	bool gpio_set;
 	u32 reset_gpio_number;
 	struct i2c_client *client;
+	int reset_mode;
 };
 
 struct my_gpio {
@@ -132,6 +129,8 @@ static int configure_default(struct i2c_client *client)
 	unsigned int x_addr_start = (INIT_X_OFFSET-INIT_X_RES*INIT_SKIP)/2;
 	unsigned int y_addr_start = (INIT_Y_OFFSET-INIT_Y_RES*INIT_SKIP)/2;
 
+	dev_dbg(&client->dev,
+		"Configure sensor with default registers...\n");
 	if (INIT_SKIP == 2)
 		skip_val = MT_SKIP_2;
 	else if (INIT_SKIP == 4)
@@ -291,11 +290,19 @@ static int MT9J003_reset(struct v4l2_subdev *sd, u32 val)
 	int err = 0;
 	struct MT9J003_state *state = to_state(sd);
 
+	state->reset_mode = val;
+
+	if (val != 1)
+		goto esc;
+
+	dev_dbg(sd->dev, "Reseting sensor from the gpio\n");
 	gp.flag = GPIOF_OUT_INIT_LOW;
 	gp.label = "gp_reset";
 
 	if (!state->gpio_set) {
-		state->reset_gpio_number = of_get_named_gpio(sd->dev->of_node, "ant,reset-gpio", 0);
+		state->reset_gpio_number = of_get_named_gpio(sd->dev->of_node,
+							     "ant,reset-gpio",
+							     0);
 		if (!gpio_is_valid(state->reset_gpio_number)) {
 			dev_err(&state->client->dev,
 				"Failed to read property \"ant,reset-gpio\"\n");
@@ -314,6 +321,7 @@ static int MT9J003_reset(struct v4l2_subdev *sd, u32 val)
 	mdelay(100);
 	gpio_set_value(gp.port_number, 1);
 	mdelay(1);
+esc:
 	return 0;
 error:
 	return err;
@@ -323,15 +331,26 @@ static int MT9J003_init(struct v4l2_subdev *sd, u32 val)
 {
 	struct MT9J003_state *state = to_state(sd);
 
-	dev_dbg(&state->client->dev,
-		"Configure sensor with default registers...\n");
 	configure_default(state->client);
+	return 0;
+}
+static int MT9J003_registered(struct v4l2_subdev *sd)
+{
+	struct MT9J003_state *state = to_state(sd);
+
+	if (!state->reset_mode) {
+		MT9J003_reset(sd, 1);
+		configure_default(state->client);
+	}
 	return 0;
 }
 
 static const struct v4l2_subdev_core_ops MT9J003_core_ops = {
 	.reset = MT9J003_reset,
 	.init = MT9J003_init,
+};
+static const struct v4l2_subdev_internal_ops MT9J003_internal_ops = {
+	.registered = MT9J003_registered,
 };
 
 static const struct v4l2_subdev_pad_ops MT9J003_pad_ops = {
@@ -343,6 +362,8 @@ static const struct v4l2_subdev_ops MT9J003_ops = {
 	.core = &MT9J003_core_ops,
 	.pad = &MT9J003_pad_ops,
 };
+
+
 
 static struct i2c_device_id MT9J003_i2c_id[] = {
 	{ "MT9J003", (kernel_ulong_t)&MT9J003_chip_info[MT9J003] },
@@ -372,7 +393,9 @@ static int MT9J003_probe(struct i2c_client *client,
 	state->client = client;
 	sd = &state->sd;
 	hdl = &state->hdl;
+	state->reset_mode = 0;
 
+	state->sd.internal_ops = &MT9J003_internal_ops;
 	v4l2_i2c_subdev_init(sd, client, &MT9J003_ops);
 	v4l2_ctrl_handler_init(hdl, 2);
 
@@ -389,7 +412,7 @@ static int MT9J003_remove(struct i2c_client *client)
 	struct MT9J003_state *state = to_state(sd);
 
 	if (state->gpio_set)
-		gpio_free(58);
+		gpio_free(state->reset_gpio_number);
 
 	v4l2_async_unregister_subdev(sd);
 	v4l2_device_unregister_subdev(sd);

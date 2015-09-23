@@ -48,6 +48,10 @@ static struct hispi_priv_data *notifier_to_priv(struct v4l2_async_notifier *n)
 {
 	return container_of(n, struct hispi_priv_data, notifier);
 };
+static struct hispi_priv_data *channel_to_priv(struct sensor_channel *channel)
+{
+	return container_of(channel, struct hispi_priv_data, channel);
+};
 
 static inline unsigned int hispi_read_reg(struct hispi_priv_data *priv,
 				   unsigned int offset)
@@ -91,11 +95,11 @@ void *alloc_ctxs[])
 	*num_planes = 1;
 
 	if (fmt) {
-		dev_dbg(&channel->vdev.dev,
+		dev_dbg(&channel->dev,
 			"We have format and we're going to use it\n");
 		sizes[0] = fmt->fmt.pix.sizeimage;
 	} else {
-		dev_dbg(&channel->vdev.dev,
+		dev_dbg(&channel->dev,
 			"Format is taken from channel settings\n");
 		sizes[0] = channel->video_x * channel->video_y * channel->bpp;
 	}
@@ -112,7 +116,7 @@ static int hispi_buf_prepare(struct vb2_buffer *vb)
 
 	size = channel->video_x * channel->video_y * channel->bpp;
 	if (vb2_plane_size(vb, 0) < size) {
-		dev_err(&channel->vdev.dev,
+		dev_err(&channel->dev,
 			"data will not fit the plane (%lu < %u)\n",
 			vb2_plane_size(vb, 0), size);
 		return -EINVAL;
@@ -151,7 +155,7 @@ static void setup_internal_transfer(struct sensor_channel *channel)
 					      DMA_PREP_INTERRUPT);
 	kfree(xt);
 	if (!desc) {
-		dev_err(&channel->vdev.dev, "vdma desc prepare error\n");
+		dev_err(&channel->dev, "vdma desc prepare error\n");
 		return;
 	}
 
@@ -160,7 +164,7 @@ static void setup_internal_transfer(struct sensor_channel *channel)
 	cookie = dmaengine_submit(desc);
 
 	if (cookie < 0) {
-		dev_err(&channel->vdev.dev,
+		dev_err(&channel->dev,
 			"vdma engine submit error\n");
 		return;
 	}
@@ -254,7 +258,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 		xt->sgl[0].icg = 0;
 		xt->dir = DMA_DEV_TO_MEM;
 
-		dev_dbg(&channel->vdev.dev,
+		dev_dbg(&channel->dev,
 			"Internal VDMA addr is: 0x%08x, size = %ld\n",
 			internal_dst, size);
 
@@ -262,7 +266,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 						      DMA_PREP_INTERRUPT);
 		kfree(xt);
 		if (!desc) {
-			dev_err(&channel->vdev.dev,
+			dev_err(&channel->dev,
 				"vdma desc prepare error\n");
 			return;
 		}
@@ -272,7 +276,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 
 		cookie = dmaengine_submit(desc);
 		if (cookie < 0) {
-			dev_err(&channel->vdev.dev,
+			dev_err(&channel->dev,
 				"vdma engine submit error\n");
 			return;
 		}
@@ -289,7 +293,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 					     DMA_CTRL_ACK |
 					     DMA_PREP_INTERRUPT);
 	if (!desc) {
-		dev_err(&channel->vdev.dev, "dma desc prepare error\n");
+		dev_err(&channel->dev, "dma desc prepare error\n");
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
@@ -299,7 +303,7 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 
 	cookie = desc->tx_submit(desc);
 	if (cookie < 0) {
-		dev_err(&channel->vdev.dev, "dma engine submit error\n");
+		dev_err(&channel->dev, "dma engine submit error\n");
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
@@ -317,6 +321,11 @@ static int hispi_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct sensor_channel *channel = vb2_get_drv_priv(q);
 
+	if (!hispi_read_reg(channel_to_priv(channel), STATUS_REG)) {
+		dev_err(&channel->dev,
+			"Unable to start streaming, Sensor is not Synced\n");
+		return -EIO;
+	}
 	dma_async_issue_pending(channel->preview_dma);
 	return 0;
 }
@@ -373,10 +382,11 @@ static int hispi_reset_sensor(struct hispi_priv_data *private)
 	int err;
 
 	hispi_write_reg(private, CTRL_REG, 0);
-	err = v4l2_subdev_call(private->channel.subdev, core, reset, 0);
+	err = v4l2_subdev_call(private->channel.subdev, core, reset,
+			       private->reset_mode);
 	private->sensor_synced = 0;
 	if (err) {
-		dev_err(&private->channel.vdev.dev,
+		dev_err(&private->channel.dev,
 			"Error during calling subdev\n");
 		return err;
 	}
@@ -390,14 +400,14 @@ static int hispi_configure_sensor(struct hispi_priv_data *private)
 	hispi_write_reg(private, CTRL_REG, 0);
 	err = v4l2_subdev_call(private->channel.subdev, core, init, 0);
 	if (err) {
-		dev_err(&private->channel.vdev.dev,
+		dev_err(&private->channel.dev,
 			"Error during calling subdev\n");
 		return err;
 	}
 	hispi_write_reg(private, CTRL_REG, ENABLE_BIT);
 	msleep(100);
 	reg = hispi_read_reg(private, STATUS_REG);
-	dev_dbg(&private->channel.vdev.dev, "Sensor is %ssynced\n",
+	dev_dbg(&private->channel.dev, "Sensor is %ssynced\n",
 		reg?"":"not ");
 	if (!reg)
 		private->sensor_synced = 0;
@@ -500,7 +510,7 @@ static int hispi_enum_fmt_vid_cap(struct file *file, void *priv_fh,
 
 	struct hispi_priv_data *private = video_drvdata(file);
 
-	dev_dbg(&private->channel.vdev.dev,
+	dev_dbg(&private->channel.dev,
 		"index[%d] = %s\n", f->index, f->description);
 
 	if (f->index == 0) {
@@ -695,7 +705,8 @@ static int hispi_sensor_async_bound(struct v4l2_async_notifier *notifier,
 	x = MAX_ATTEMPTS;
 
 	/*Auto-syncining if defined in device-tree*/
-	if (private->internal_reset) {
+	if (private->reset_mode == 1) {
+		/*internal auto-syncing*/
 		hispi_reset_sensor(private);
 		do {
 			reg = hispi_configure_sensor(private);
@@ -704,14 +715,16 @@ static int hispi_sensor_async_bound(struct v4l2_async_notifier *notifier,
 
 		} while (--x && !reg);
 		if (!reg && !x)
-			dev_err(&private->channel.vdev.dev,
+			dev_err(&private->channel.dev,
 				"Failed to sync %s\n",
 				private->asd.match.of.node->name);
 		else
-			dev_dbg(&private->channel.vdev.dev,
+			dev_dbg(&private->channel.dev,
 				"Sensor is synced after %d attemps\n",
 				MAX_ATTEMPTS-x);
-	}
+	} else
+		hispi_reset_sensor(private); /*external reseting*/
+
 	return 0;
 }
 
@@ -782,7 +795,7 @@ static int hispi_probe(struct platform_device *pdev)
 	channel->current_write_buffer = 0;
 	channel->current_read_buffer = 1;
 	channel->internal_streaming = 0;
-
+	channel->dev = pdev->dev;
 	channel->video_x = MAX_X;
 	channel->video_y = MAX_Y;
 	channel->bpp = BPP / 8;
@@ -813,10 +826,10 @@ static int hispi_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 	}
 
-	err = of_property_read_u32(pdev->dev.of_node, "ant,internal-reset",
-				   (u32 *)&(private->internal_reset));
+	err = of_property_read_u32(pdev->dev.of_node, "ant,reset_mode",
+				   (u32 *)&(private->reset_mode));
 	if (err)
-		private->internal_reset = true;
+		private->reset_mode = false;
 
 	private->asd.match_type = V4L2_ASYNC_MATCH_OF;
 	private->asd.match.of.node = v4l2_of_get_remote_port_parent(ep_node);
