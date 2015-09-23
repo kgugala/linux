@@ -1,5 +1,5 @@
 /*
- * Driver for MT9J003 image sensor
+ * Driver for mt9j003 image sensor
  *
  * Copyright (C) 2015 Antmicro Ltd.
  *
@@ -32,7 +32,7 @@
 #include <media/v4l2-device.h>
 #include <media/v4l2-dv-timings.h>
 #include <media/v4l2-of.h>
-#include "MT9J003.h"
+#include "mt9j003.h"
 
 #define I2C_SEND_AND_CHECK(client, reg, val) \
 	do {\
@@ -46,18 +46,18 @@
 		if (err < 0) \
 			return err; } while (0)
 
-MODULE_DESCRIPTION("Driver for MT9J003 image sensor");
+MODULE_DESCRIPTION("MT9J003 image sensor support");
 MODULE_AUTHOR("Szymon Sobczak");
 MODULE_LICENSE("GPL v2");
 
-enum MT9J003_type {
-	MT9J003,
+enum mt9j003_type {
+	mt9j003,
 };
 
-struct MT9J003_chip_info {};
-static const struct MT9J003_chip_info MT9J003_chip_info[] = {{},};
+struct mt9j003_chip_info {};
+static const struct mt9j003_chip_info mt9j003_chip_info[] = {{},};
 
-struct MT9J003_state {
+struct mt9j003_state {
 	struct v4l2_ctrl_handler hdl;
 	struct v4l2_subdev sd;
 	bool gpio_set;
@@ -217,17 +217,17 @@ static int configure_default(struct i2c_client *client)
 	return 0;
 }
 
-static inline struct MT9J003_state *to_state(struct v4l2_subdev *sd)
+static inline struct mt9j003_state *to_state(struct v4l2_subdev *sd)
 {
-	return container_of(sd, struct MT9J003_state, sd);
+	return container_of(sd, struct mt9j003_state, sd);
 }
 
 
 
-static int MT9J003_get_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
+static int mt9j003_get_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 			      struct v4l2_subdev_format *format)
 {
-	struct MT9J003_state *state = to_state(sd);
+	struct mt9j003_state *state = to_state(sd);
 	u16 reg;
 	int err, ret;
 
@@ -253,11 +253,11 @@ static int MT9J003_get_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 	return ret;
 }
 
-static int MT9J003_set_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
+static int mt9j003_set_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 			      struct v4l2_subdev_format *format)
 {
 	int x_res, y_res, x_offset, y_offset, err, skip_val;
-	struct MT9J003_state *state = to_state(sd);
+	struct mt9j003_state *state = to_state(sd);
 	unsigned int x_addr_start, y_addr_start;
 
 	x_res = format->format.width;
@@ -284,11 +284,11 @@ static int MT9J003_set_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 }
 
 
-static int MT9J003_reset(struct v4l2_subdev *sd, u32 val)
+static int mt9j003_reset(struct v4l2_subdev *sd, u32 val)
 {
 	struct my_gpio gp;
 	int err = 0;
-	struct MT9J003_state *state = to_state(sd);
+	struct mt9j003_state *state = to_state(sd);
 
 	state->reset_mode = val;
 
@@ -327,61 +327,61 @@ error:
 	return err;
 }
 
-static int MT9J003_init(struct v4l2_subdev *sd, u32 val)
+static int mt9j003_init(struct v4l2_subdev *sd, u32 val)
 {
-	struct MT9J003_state *state = to_state(sd);
+	struct mt9j003_state *state = to_state(sd);
 
 	configure_default(state->client);
 	return 0;
 }
-static int MT9J003_registered(struct v4l2_subdev *sd)
+static int mt9j003_registered(struct v4l2_subdev *sd)
 {
-	struct MT9J003_state *state = to_state(sd);
+	struct mt9j003_state *state = to_state(sd);
 
 	if (!state->reset_mode) {
-		MT9J003_reset(sd, 1);
+		mt9j003_reset(sd, 1);
 		configure_default(state->client);
 	}
 	return 0;
 }
 
-static const struct v4l2_subdev_core_ops MT9J003_core_ops = {
-	.reset = MT9J003_reset,
-	.init = MT9J003_init,
+static const struct v4l2_subdev_core_ops mt9j003_core_ops = {
+	.reset = mt9j003_reset,
+	.init = mt9j003_init,
 };
-static const struct v4l2_subdev_internal_ops MT9J003_internal_ops = {
-	.registered = MT9J003_registered,
-};
-
-static const struct v4l2_subdev_pad_ops MT9J003_pad_ops = {
-	.get_fmt = MT9J003_get_format,
-	.set_fmt = MT9J003_set_format,
+static const struct v4l2_subdev_internal_ops mt9j003_internal_ops = {
+	.registered = mt9j003_registered,
 };
 
-static const struct v4l2_subdev_ops MT9J003_ops = {
-	.core = &MT9J003_core_ops,
-	.pad = &MT9J003_pad_ops,
+static const struct v4l2_subdev_pad_ops mt9j003_pad_ops = {
+	.get_fmt = mt9j003_get_format,
+	.set_fmt = mt9j003_set_format,
+};
+
+static const struct v4l2_subdev_ops mt9j003_ops = {
+	.core = &mt9j003_core_ops,
+	.pad = &mt9j003_pad_ops,
 };
 
 
 
-static struct i2c_device_id MT9J003_i2c_id[] = {
-	{ "MT9J003", (kernel_ulong_t)&MT9J003_chip_info[MT9J003] },
+static struct i2c_device_id mt9j003_i2c_id[] = {
+	{ "mt9j003", (kernel_ulong_t)&mt9j003_chip_info[mt9j003] },
 	{ }
 };
-MODULE_DEVICE_TABLE(i2c, MT9J003_i2c_id);
-static struct of_device_id MT9J003_of_id[] = {
-	{ .compatible = "apt,MT9J003", },
+MODULE_DEVICE_TABLE(i2c, mt9j003_i2c_id);
+static struct of_device_id mt9j003_of_id[] = {
+	{ .compatible = "apt,mt9j003", },
 	{ }
 };
-MODULE_DEVICE_TABLE(of, MT9J003_of_id);
-static int MT9J003_probe(struct i2c_client *client,
+MODULE_DEVICE_TABLE(of, mt9j003_of_id);
+static int mt9j003_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id)
 {
 
 	struct v4l2_ctrl_handler *hdl;
 	struct v4l2_subdev *sd;
-	struct MT9J003_state *state;
+	struct mt9j003_state *state;
 
 	int err;
 
@@ -395,8 +395,8 @@ static int MT9J003_probe(struct i2c_client *client,
 	hdl = &state->hdl;
 	state->reset_mode = 0;
 
-	state->sd.internal_ops = &MT9J003_internal_ops;
-	v4l2_i2c_subdev_init(sd, client, &MT9J003_ops);
+	state->sd.internal_ops = &mt9j003_internal_ops;
+	v4l2_i2c_subdev_init(sd, client, &mt9j003_ops);
 	v4l2_ctrl_handler_init(hdl, 2);
 
 	err = v4l2_async_register_subdev(sd);
@@ -406,10 +406,10 @@ static int MT9J003_probe(struct i2c_client *client,
 
 }
 
-static int MT9J003_remove(struct i2c_client *client)
+static int mt9j003_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
-	struct MT9J003_state *state = to_state(sd);
+	struct mt9j003_state *state = to_state(sd);
 
 	if (state->gpio_set)
 		gpio_free(state->reset_gpio_number);
@@ -420,15 +420,15 @@ static int MT9J003_remove(struct i2c_client *client)
 	return 0;
 }
 
-static struct i2c_driver MT9J003_driver = {
+static struct i2c_driver mt9j003_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
-		.name = "MT9J003",
-		.of_match_table = of_match_ptr(MT9J003_of_id),
+		.name = "mt9j003",
+		.of_match_table = of_match_ptr(mt9j003_of_id),
 	},
-	.probe = MT9J003_probe,
-	.remove = MT9J003_remove,
-	.id_table = MT9J003_i2c_id,
+	.probe = mt9j003_probe,
+	.remove = mt9j003_remove,
+	.id_table = mt9j003_i2c_id,
 };
 
-module_i2c_driver(MT9J003_driver);
+module_i2c_driver(mt9j003_driver);
