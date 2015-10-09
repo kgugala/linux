@@ -18,6 +18,7 @@ struct sensor_channel {
 	struct video_device vdev;
 	struct vb2_queue q;
 	struct v4l2_subdev *subdev;
+	struct device dev;
 	struct mutex lock;
 	spinlock_t spinlock;
 	/* internal video dma */
@@ -30,6 +31,7 @@ struct sensor_channel {
 	uint32_t video_x;
 	uint32_t video_y;
 	uint32_t bpp;
+
 
 	struct list_head queued_buffers;
 
@@ -58,6 +60,7 @@ struct hispi_priv_data {
 	struct v4l2_async_notifier notifier;
 	struct v4l2_async_subdev asd;
 	struct v4l2_async_subdev *asds[1];
+	uint8_t reset_mode;
 };
 
 struct hispi_buffer {
