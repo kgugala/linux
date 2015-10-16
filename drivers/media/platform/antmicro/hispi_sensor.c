@@ -320,7 +320,13 @@ static void hispi_buf_queue(struct vb2_buffer *vb)
 static int hispi_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct sensor_channel *channel = vb2_get_drv_priv(q);
+	int err;
 
+	err = v4l2_subdev_call(channel->subdev, video, s_stream, 1);
+	if (err) {
+		dev_err(&channel->dev, "Error during calling subdev: %d", err);
+		return err;
+	}
 	if (!hispi_read_reg(channel_to_priv(channel), STATUS_REG)) {
 		dev_err(&channel->dev,
 			"Unable to start streaming, Sensor is not Synced\n");
@@ -335,6 +341,9 @@ static void hispi_stop_streaming(struct vb2_queue *q)
 	struct sensor_channel *channel = vb2_get_drv_priv(q);
 	struct hispi_buffer *buf;
 	unsigned long flags;
+	int err;
+
+	err = v4l2_subdev_call(channel->subdev, video, s_stream, 0);
 
 	dmaengine_terminate_all(channel->preview_dma);
 	dmaengine_terminate_all(channel->dma);
@@ -495,6 +504,7 @@ static int hispi_streamon(struct file *file, void *priv_fh,
 	if (buffer_type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
+
 	return vb2_streamon(&channel->q, buffer_type);
 }
 
@@ -503,6 +513,7 @@ static int hispi_streamoff(struct file *file, void *priv_fh,
 {
 	return 0;
 }
+
 
 static int hispi_enum_fmt_vid_cap(struct file *file, void *priv_fh,
 				  struct v4l2_fmtdesc *f)
@@ -603,8 +614,12 @@ static int hispi_s_fmt_vid_cap(struct file *file, void *priv_fh,
 		pix->sizeimage =  pix->bytesperline * pix->height;
 		pix->field = V4L2_FIELD_NONE;
 		pix->priv = 0;
-		v4l2_subdev_call(channel->subdev, pad, set_fmt, NULL, &fmt);
-		ret = 0;
+		ret = v4l2_subdev_call(channel->subdev, pad,
+				       set_fmt, NULL, &fmt);
+		if (ret)
+			ret = -EINVAL;
+		else
+			ret = 0;
 	} else
 		ret = -EINVAL;
 	return ret;
