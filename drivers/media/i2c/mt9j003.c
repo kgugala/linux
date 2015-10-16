@@ -344,6 +344,16 @@ static int mt9j003_registered(struct v4l2_subdev *sd)
 	}
 	return 0;
 }
+static int mt9j003_s_stream(struct v4l2_subdev *sd, int enable)
+{
+	/*
+	 * TODO:
+	 * function is implemented but empty
+	 * because streaming must be enabled in
+	 * registered function for properly syncing
+	 */
+	return 0;
+}
 
 static const struct v4l2_subdev_core_ops mt9j003_core_ops = {
 	.reset = mt9j003_reset,
@@ -357,10 +367,13 @@ static const struct v4l2_subdev_pad_ops mt9j003_pad_ops = {
 	.get_fmt = mt9j003_get_format,
 	.set_fmt = mt9j003_set_format,
 };
-
+static const struct v4l2_subdev_video_ops mt9j003_video_ops = {
+	.s_stream = &mt9j003_s_stream,
+};
 static const struct v4l2_subdev_ops mt9j003_ops = {
 	.core = &mt9j003_core_ops,
 	.pad = &mt9j003_pad_ops,
+	.video = &mt9j003_video_ops,
 };
 
 
